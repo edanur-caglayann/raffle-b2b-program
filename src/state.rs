@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]//121
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]//121
 pub struct Raffle{
     pub initializer:[u8;32],
     pub raffle_state:u8,
@@ -25,13 +25,14 @@ pub struct RaffleCounter{
     pub number_of_raffles:u64,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]
-pub struct RaffleName{
-    pub name:[u8;32],
-}
 
 
 #[derive(BorshDeserialize)]
 pub struct RandomNumber{
   pub random_number:u64,
+}
+
+#[derive(BorshDeserialize, Debug, PartialEq)]
+pub struct NumberOfParticipants{
+  pub number_of_participants:u64,
 }

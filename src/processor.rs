@@ -1,4 +1,4 @@
-use crate::{instruction::RaffleProgramInstruction, state::{Participant, Raffle, RaffleCounter, RaffleName, RandomNumber}};
+use crate::{instruction::RaffleProgramInstruction, state::{NumberOfParticipants, Participant, Raffle, RaffleCounter, RandomNumber}};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, instruction::{AccountMeta, Instruction}, msg, program::{get_return_data, invoke, invoke_signed}, pubkey::Pubkey, rent::Rent, system_instruction
@@ -16,11 +16,11 @@ impl Processor {
         let instruction: RaffleProgramInstruction = RaffleProgramInstruction::unpack(instruction_data)?;
 
         match instruction {
-            RaffleProgramInstruction::InitRaffle {name}=> {
-                Self::init_raffle(accounts, program_id, name)
+            RaffleProgramInstruction::InitRaffle {init_raffle}=> {
+                Self::init_raffle(accounts, program_id, init_raffle)
             },
-            RaffleProgramInstruction::AddWallets => {
-                Self::add_wallets_raffle(accounts, program_id)
+            RaffleProgramInstruction::AddWallets { number_of_participants }=> {
+                Self::add_wallets_raffle(accounts, program_id, number_of_participants)
             },
             RaffleProgramInstruction::ChooseWinner => {
                 Self::choose_winner(accounts, program_id)
@@ -38,7 +38,7 @@ impl Processor {
         }
     }
 
-    fn init_raffle(accounts: &[AccountInfo],program_id: &Pubkey, name:RaffleName) -> ProgramResult{
+    fn init_raffle(accounts: &[AccountInfo],program_id: &Pubkey, init_raffle:Raffle) -> ProgramResult{
 
 
        let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
@@ -74,13 +74,13 @@ impl Processor {
         )?;
 
         let mut raffle_name_array:[u8;32] = [0;32];
-        name.name.serialize(&mut &mut raffle_name_array[..]).unwrap();
+        init_raffle.raffle_name.serialize(&mut &mut raffle_name_array[..]).unwrap();
         
 
         let raffle = Raffle{
             initializer: initializer.key.to_bytes(),
             raffle_state: 1,
-            number_of_participants: 0,
+            number_of_participants: init_raffle.number_of_participants,
             winner_no: 0,
             winner_wallet: [0;32],
             raffle_name: raffle_name_array,
@@ -93,7 +93,7 @@ impl Processor {
         Ok(())
     }
 
-    fn add_wallets_raffle(accounts: &[AccountInfo],program_id: &Pubkey) -> ProgramResult{
+    fn add_wallets_raffle(accounts: &[AccountInfo],program_id: &Pubkey, mut number_of_participants:NumberOfParticipants) -> ProgramResult{
 
         let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
@@ -103,7 +103,7 @@ impl Processor {
         let system_program: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
 
-        let mut raffle: Raffle = Raffle::try_from_slice(&raffle_account.data.borrow())?;
+        let raffle: Raffle = Raffle::try_from_slice(&raffle_account.data.borrow())?;
     
         if raffle_account.owner != program_id {return Err(InvalidRaffle.into());}
         if raffle.initializer != initializer.key.to_bytes(){return Err(InvalidInitializer.into());}
@@ -113,7 +113,6 @@ impl Processor {
         let rent_amount: u64 = rent.minimum_balance(48);
 
         let total_loop = accounts_iter.len() as u64 / 2;
-        msg!("{}",accounts_iter.len());
     
         for _x in 0..total_loop {
 
@@ -122,7 +121,7 @@ impl Processor {
             let user: &AccountInfo<'_> = next_account_info(accounts_iter)?;
             let user_pda: &AccountInfo<'_> = next_account_info(accounts_iter)?;
         
-            raffle.number_of_participants = raffle.number_of_participants.checked_add(1).ok_or(ArithmeticError)?;
+            number_of_participants.number_of_participants = number_of_participants.number_of_participants.checked_add(1).ok_or(ArithmeticError)?;
         
             let (participant_account_address, bump) = 
             Pubkey::find_program_address(&[b"part", &raffle.number_of_participants.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes()], program_id);
@@ -146,16 +145,10 @@ impl Processor {
                 raffle_no: raffle.raffle_no };
 
 
-
             participant.serialize(&mut &mut user_pda.data.borrow_mut()[..])?;
 
 
         }
-        msg!("a");
-
-        msg!("{}",accounts_iter.len());
-
-        raffle.serialize(&mut &mut raffle_account.data.borrow_mut()[..])?;
 
 
         Ok(())

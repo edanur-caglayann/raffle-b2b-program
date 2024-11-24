@@ -20,7 +20,7 @@ import {
 
 
 
-  const init_raffle = async (raffle_name:string) => {
+  const init_raffle = async (raffle_name:string, number_of_participants:bigint) => {
   
   
        const counter_account = PublicKey.findProgramAddressSync([Buffer.from("counter")],raffle_program)[0]
@@ -37,7 +37,14 @@ import {
      
        const raffle_name_array = stringToNumberArray32Bytes(raffle_name)
 
-       const concated = Uint8Array.of(0, ...raffle_name_array);
+       const raffle = new Raffle();
+
+       raffle.number_of_participants = number_of_participants;
+       raffle.raffle_name = raffle_name_array;
+
+       const raffle_serialized = serialize(RaffleSchema,raffle);
+
+       const concated = Uint8Array.of(0, ...raffle_serialized);
        
        console.log(concated.length)
      
@@ -69,7 +76,7 @@ import {
        console.log(sig)
   }
 
-  const add_wallets = async (raffle_no:bigint) => {
+  const add_wallets = async (raffle_no:bigint, batch:bigint) => {
   
   
    const le_bytes = numberToLEBytes8(raffle_no)
@@ -77,49 +84,44 @@ import {
    const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),le_bytes],raffle_program)[0];
 
 
-   const raffle_account_info = await connection.getAccountInfo(raffle_account);
-
-   const raffle = deserialize(RaffleSchema,Raffle,raffle_account_info?.data!);
-
-   console.log(raffle.number_of_participants.toString())
 
    
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_2_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_3_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_4_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_5_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_6_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_7_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_8_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_9_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_10_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_11_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_12_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_13_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_14_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_15_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_16_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_17_le_bytes = numberToLEBytes8(raffle.number_of_participants);
-   raffle.number_of_participants = BigInt(Number(raffle.number_of_participants) + 1);
-   const participant_no_18_le_bytes = numberToLEBytes8(raffle.number_of_participants);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_2_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_3_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_4_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_5_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_6_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_7_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_8_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_9_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_10_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_11_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_12_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_13_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_14_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_15_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_16_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_17_le_bytes = numberToLEBytes8(batch);
+   batch = BigInt(Number(batch) + 1);
+   const participant_no_18_le_bytes = numberToLEBytes8(batch);
 
    const user = Keypair.generate().publicKey;
    const user_2 = Keypair.generate().publicKey;
@@ -376,5 +378,6 @@ import {
      connection.sendTransaction(tx);
   }
 
+  let batch:bigint = BigInt(0)
 
-add_wallets(BigInt(1))
+add_wallets(BigInt(1),batch)

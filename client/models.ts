@@ -159,3 +159,33 @@ export  const ParticipationSchema =new Map([
   },
   ],
   ])
+
+
+  export  class NumberOfParticipants{
+
+    batch:bigint = BigInt(0);
+
+    constructor(fields: {
+
+      batch:bigint;
+
+  
+     } | undefined = undefined)
+      {if (fields) {
+        this.batch = fields.batch;
+
+      }
+    }
+  }
+  
+export  const NumberOfParticipantsSchema =new Map([
+    [
+      NumberOfParticipants,
+      {
+        kind: "struct",
+        fields: [
+          ["batch","u64"],
+    ],
+  },
+  ],
+  ])

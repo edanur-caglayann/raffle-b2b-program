@@ -1,11 +1,11 @@
-use crate::{error::RaffleProgramError::InvalidInstruction, state::RaffleName};
+use crate::{error::RaffleProgramError::InvalidInstruction, state::{NumberOfParticipants, Raffle}};
 use borsh::BorshDeserialize;
 use solana_program::program_error::ProgramError;
 
 #[derive(Debug, PartialEq)]
 pub enum RaffleProgramInstruction {
-    InitRaffle{name:RaffleName},
-    AddWallets,
+    InitRaffle{init_raffle:Raffle},
+    AddWallets{number_of_participants:NumberOfParticipants},
     ChooseWinner,
     PublishWinner,
     InitCounter,
@@ -18,9 +18,11 @@ impl RaffleProgramInstruction {
     let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
     Ok(match tag {
       0 => Self::InitRaffle{
-        name:RaffleName::try_from_slice(&rest)?
+        init_raffle:Raffle::try_from_slice(&rest)?
       },
-      1 => Self::AddWallets,
+      1 => Self::AddWallets{
+        number_of_participants:NumberOfParticipants::try_from_slice(&rest)?
+      },
       2 => Self::ChooseWinner,
       3 => Self::PublishWinner,
       4 => Self::InitCounter,
