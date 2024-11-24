@@ -161,7 +161,7 @@ export  const ParticipationSchema =new Map([
   ])
 
 
-  export  class NumberOfParticipants{
+  export  class Batch{
 
     batch:bigint = BigInt(0);
 
@@ -178,9 +178,9 @@ export  const ParticipationSchema =new Map([
     }
   }
   
-export  const NumberOfParticipantsSchema =new Map([
+export  const BatchSchema =new Map([
     [
-      NumberOfParticipants,
+      Batch,
       {
         kind: "struct",
         fields: [

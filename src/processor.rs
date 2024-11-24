@@ -97,7 +97,6 @@ impl Processor {
 
         let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
-
         let initializer: &AccountInfo<'_> = next_account_info(accounts_iter)?;
         let raffle_account: &AccountInfo<'_> = next_account_info(accounts_iter)?;
         let system_program: &AccountInfo<'_> = next_account_info(accounts_iter)?;
@@ -124,10 +123,12 @@ impl Processor {
             let user_pda: &AccountInfo<'_> = next_account_info(accounts_iter)?;
         
             batch.batch = batch.batch.checked_add(1).ok_or(ArithmeticError)?;
+
         
             let (participant_account_address, bump) = 
-            Pubkey::find_program_address(&[b"part", &raffle.number_of_participants.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes()], program_id);
-    
+            Pubkey::find_program_address(&[b"part", &batch.batch.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes()], program_id);
+
+
     
              invoke_signed(
                  &system_instruction::create_account(
@@ -138,7 +139,7 @@ impl Processor {
                      program_id,
                  ),
                  &[initializer.clone(), user_pda.clone(),system_program.clone() ],
-                 &[&[b"part", &raffle.number_of_participants.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes(), &[bump]]],
+                 &[&[b"part", &batch.batch.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes(), &[bump]]],
              )?;
 
              let participant: Participant = Participant{ 
