@@ -32,7 +32,11 @@ pub enum RaffleProgramError {
   InvaliedRaffleNo,
 
   #[error("participant pda doesnt belong to program")]//9
-  InvalidParticipantPDA
+  InvalidParticipantPDA,
+
+
+  #[error("raffle state is invalid")]//10
+  InvalidRaffleState
 
 }
 

@@ -33,6 +33,6 @@ pub struct RandomNumber{
 }
 
 #[derive(BorshDeserialize, Debug, PartialEq)]
-pub struct NumberOfParticipants{
-  pub number_of_participants:u64,
+pub struct Batch{
+  pub batch:u64,
 }

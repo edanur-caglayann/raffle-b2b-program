@@ -1,10 +1,10 @@
-use crate::{instruction::RaffleProgramInstruction, state::{NumberOfParticipants, Participant, Raffle, RaffleCounter, RandomNumber}};
+use crate::{instruction::RaffleProgramInstruction, state::{Batch, Participant, Raffle, RaffleCounter, RandomNumber}};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, instruction::{AccountMeta, Instruction}, msg, program::{get_return_data, invoke, invoke_signed}, pubkey::Pubkey, rent::Rent, system_instruction
 };
 use crate::error::RaffleProgramError::{InvalidCounter, ArithmeticError, InvalidInitializer, InvalidRaffle,
-     InitializerNotSigner, InvalidWinnerPDA,InvaliedWinnerNo,InvaliedRaffleNo, InvalidParticipantPDA};
+     InitializerNotSigner, InvalidWinnerPDA,InvaliedWinnerNo,InvaliedRaffleNo, InvalidParticipantPDA, InvalidRaffleState};
 
 pub struct Processor;
 impl Processor {
@@ -93,7 +93,7 @@ impl Processor {
         Ok(())
     }
 
-    fn add_wallets_raffle(accounts: &[AccountInfo],program_id: &Pubkey, mut number_of_participants:NumberOfParticipants) -> ProgramResult{
+    fn add_wallets_raffle(accounts: &[AccountInfo],program_id: &Pubkey, mut batch:Batch) -> ProgramResult{
 
         let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
@@ -108,7 +108,9 @@ impl Processor {
         if raffle_account.owner != program_id {return Err(InvalidRaffle.into());}
         if raffle.initializer != initializer.key.to_bytes(){return Err(InvalidInitializer.into());}
         if !initializer.is_signer{return Err(InitializerNotSigner.into())}
-    
+
+        if raffle.raffle_state != 1{return Err(InvalidRaffleState.into());}
+
         let rent: Rent = Rent::default();
         let rent_amount: u64 = rent.minimum_balance(48);
 
@@ -121,7 +123,7 @@ impl Processor {
             let user: &AccountInfo<'_> = next_account_info(accounts_iter)?;
             let user_pda: &AccountInfo<'_> = next_account_info(accounts_iter)?;
         
-            number_of_participants.number_of_participants = number_of_participants.number_of_participants.checked_add(1).ok_or(ArithmeticError)?;
+            batch.batch = batch.batch.checked_add(1).ok_or(ArithmeticError)?;
         
             let (participant_account_address, bump) = 
             Pubkey::find_program_address(&[b"part", &raffle.number_of_participants.to_le_bytes(),b"raf",&raffle.raffle_no.to_le_bytes()], program_id);
@@ -167,11 +169,13 @@ impl Processor {
         let system_program: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
 
-        let mut raffle = Raffle::try_from_slice(&raffle_account.data.borrow())?;
+        let mut raffle: Raffle = Raffle::try_from_slice(&raffle_account.data.borrow())?;
     
         if raffle_account.owner != program_id {return Err(InvalidRaffle.into());}
         if raffle.initializer != initializer.key.to_bytes(){return Err(InvalidInitializer.into());}
         if !initializer.is_signer{return Err(InitializerNotSigner.into())}
+
+        if raffle.raffle_state != 1{return Err(InvalidRaffleState.into());}
 
 
         //Creating account metas for CPI to RNG_PROGRAM
@@ -250,6 +254,8 @@ impl Processor {
         
         if raffle.winner_no != participant.particpant_no{return Err(InvaliedWinnerNo.into());}
         if raffle.raffle_no != participant.raffle_no{return Err(InvaliedRaffleNo.into());}
+
+        if raffle.raffle_state != 2{return Err(InvalidRaffleState.into());}
 
 
        let (winner_pda_address, _bump) = 
