@@ -2,57 +2,79 @@
 
 export  class Raffle{
 
-    initializer:number[] = Array.from({length: 32}, () => 1);
     raffle_state:number = 0;
-    raffle_no:bigint = BigInt(0);
-    number_of_participants:bigint = BigInt(0);
-    winner_no:bigint = BigInt(0);
-    winner_wallet:number[] = Array.from({length: 32}, () => 1);
+    initializer:number[] = Array.from({length: 32}, () => 1);
+    token_mint:number[] = Array.from({length: 32}, () => 1);
+    winner_address:number[] = Array.from({length: 32}, () => 1);
     raffle_name:number[] = Array.from({length: 32}, () => 1);
+    raffle_no:bigint = BigInt(0);
+    current_number_of_participants:bigint = BigInt(0);
+    participants_required:bigint = BigInt(0);
+    winner_no:bigint = BigInt(0);
+    participation_fee:bigint = BigInt(0);
+    prize_amount:bigint = BigInt(0);
+    decimals:number = 0;
+    expiration_time:bigint = BigInt(0);
 
     constructor(fields: {
 
-        initializer:number[];
-        raffle_state:number;
-        raffle_no:bigint;
-        number_of_participants:bigint;
-        winner_no:bigint;
-        winner_wallet:number[];
-        raffle_name:number[];
+      raffle_state:number;
+      initializer:number[];
+      token_mint:number[];
+      winner_address:number[];
+      raffle_name:number[];
+      raffle_no:bigint;
+      current_number_of_participants:bigint;
+      participants_required:bigint;
+      winner_no:bigint;
+      participation_fee:bigint;
+      prize_amount:bigint;
+      decimals:number;
+      expiration_time:bigint;
     
   
      } | undefined = undefined)
       {if (fields) {
-        this.initializer = fields.initializer;
         this.raffle_state = fields.raffle_state;
-        this.raffle_no = fields.raffle_no;
-        this.number_of_participants = fields.number_of_participants;
-        this.winner_no = fields.winner_no;
-        this.winner_wallet = fields.winner_wallet;
+        this.initializer = fields.initializer;
+        this.token_mint = fields.token_mint;
+        this.winner_address = fields.winner_address;
         this.raffle_name = fields.raffle_name;
+        this.raffle_no = fields.raffle_no;
+        this.current_number_of_participants = fields.current_number_of_participants;
+        this.participants_required = fields.participants_required;
+        this.winner_no = fields.winner_no;
+        this.participation_fee = fields.participation_fee;
+        this.prize_amount = fields.prize_amount;
+        this.decimals = fields.decimals;
+        this.expiration_time = fields.expiration_time;
 
       }
     }
   }
-  
 export  const RaffleSchema =new Map([
     [
       Raffle,
       {
         kind: "struct",
         fields: [
-          ["initializer",["u8",32]],
           ["raffle_state","u8"],
-          ["raffle_no","u64"],
-          ["number_of_participants","u64"],
-          ["winner_no","u64"],
-          ["winner_wallet",["u8",32]],
+          ["initializer",["u8",32]],
+          ["token_mint",["u8",32]],
+          ["winner_address",["u8",32]],
           ["raffle_name",["u8",32]],
+          ["raffle_no","u64"],
+          ["current_number_of_participants","u64"],
+          ["participants_required","u64"],
+          ["winner_no","u64"],
+          ["participation_fee","u64"],
+          ["prize_amount","u64"],
+          ["decimals","u8"],
+          ["expiration_time","u64"],
+        ],
+      },
     ],
-  },
-  ],
   ])
-
 
   export  class Counter{
 
@@ -75,7 +97,6 @@ export  const RaffleSchema =new Map([
       }
     }
   }
-  
   export  const CounterSchema =new Map([
     [
       Counter,
@@ -109,7 +130,6 @@ export  const RaffleSchema =new Map([
       }
     }
   }
-  
 export  const RaffleNameSchema =new Map([
     [
       RaffleName,
@@ -145,7 +165,6 @@ export  class Participation{
       }
     }
   }
-  
 export  const ParticipationSchema =new Map([
     [
       Participation,
@@ -160,32 +179,150 @@ export  const ParticipationSchema =new Map([
   ],
   ])
 
-
-  export  class Batch{
-
-    batch:bigint = BigInt(0);
-
+  export   class InitPda{
+    bump:number = 0;
+    lamports:number = 0
+    no:number = 0;
     constructor(fields: {
-
-      batch:bigint;
-
-  
+      bump:number;
+      lamports:number;
+      no:number;
      } | undefined = undefined)
       {if (fields) {
-        this.batch = fields.batch;
-
+        this.lamports = fields.lamports;
+        this.bump = fields.bump;
+        this.no = fields.no;
       }
     }
   }
-  
-export  const BatchSchema =new Map([
+  export   const InitPdaSchema =new Map([
     [
-      Batch,
+      InitPda,
       {
         kind: "struct",
         fields: [
-          ["batch","u64"],
+          ["bump","u8"],
+          ["lamports","u64"],
+          ["no","u8"],
     ],
   },
   ],
   ])
+  
+  export  class Config{
+  
+    authority1:number[] = Array.from({ length: 32 }, () => 1);
+    authority2:number[] = Array.from({ length: 32 }, () => 1);
+    authority3:number[] = Array.from({ length: 32 }, () => 1);
+    authority4:number[] = Array.from({ length: 32 }, () => 1);
+  
+    constructor(fields: {
+      authority1:number[];
+      authority2:number[];
+      authority3:number[];
+      authority4:number[];
+  
+     } | undefined = undefined)
+      {if (fields) {
+        this.authority1 = fields.authority1;
+        this.authority2 = fields.authority2;
+        this.authority3 = fields.authority3;
+        this.authority4 = fields.authority4;
+  
+      }
+    }
+  }
+  export  const ConfigSchema =new Map([
+    [
+      Config,
+      {
+        kind: "struct",
+        fields: [
+          ["authority1",["u8",32]],
+          ["authority2",["u8",32]],
+          ["authority3",["u8",32]],
+          ["authority4",["u8",32]],
+    ],
+  },
+  ],
+  ])
+    
+  export  class Terms{
+  
+    init:number = 0;
+    fee:bigint = BigInt(0);
+    expiration_time:bigint = BigInt(0);
+    constructor(fields: {
+      init:number;
+      fee:bigint;
+      expiration_time:bigint;
+     } | undefined = undefined)
+      {if (fields) {
+  
+        this.fee = fields.fee;
+        this.init = fields.init;
+        this.expiration_time = fields.expiration_time;
+      }
+    }
+  }
+  export  const TermsSchema =new Map([
+    [
+        Terms,
+      {
+        kind: "struct",
+        fields: [
+          ["init","u8"],
+          ["fee","u64"],
+          ["expiration_time","u64"],
+    ],
+  },
+  ],
+  ])
+  
+
+  export  class InitRaffle{
+
+    raffle_name:number[] = Array.from({length: 32}, () => 1);
+    participation_fee:bigint = BigInt(0);
+    prize_amount:bigint = BigInt(0);
+    participants_required:bigint = BigInt(0);
+    decimals:number = 0;
+
+
+    constructor(fields: {
+    
+      raffle_name:number[];
+      participation_fee:bigint;
+      prize_amount:bigint;
+      participants_required:bigint;
+      decimals:number;
+
+  
+     } | undefined = undefined)
+      {if (fields) {
+
+        this.raffle_name = fields.raffle_name;
+        this.participation_fee = fields.participation_fee;
+        this.prize_amount = fields.prize_amount;
+        this.participants_required = fields.participants_required;
+        this.decimals = fields.decimals;
+
+      }
+    }
+  }
+  export  const InitRaffleSchema =new Map([
+    [
+      InitRaffle,
+      {
+        kind: "struct",
+        fields: [
+          ["raffle_name",["u8",32]],
+          ["participation_fee","u64"],
+          ["prize_amount","u64"],
+          ["participants_required","u64"],
+          ["decimals","u8"],
+        ],
+      },
+    ],
+  ])
+

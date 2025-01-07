@@ -1,9 +1,10 @@
 import { PublicKey } from "@solana/web3.js";
 import { raffle_program } from "./accounts";
 import { connection } from "./connection";
-import { deserialize_raffle_account_data, numberToLEBytes8 } from "./utils";
+import { deserialize_participation_account_data, deserialize_raffle_account_data, deserialize_term_account_data, numberToLEBytes8 } from "./utils";
 
 import baseX from "base-x";
+import { getMint } from "@solana/spl-token";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const bs58 = baseX(BASE58);
@@ -16,13 +17,13 @@ export const get_all_raffles = async() => {
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
           ],
         }
       );
       
-      deserialize_raffle_account_data(account[0].account)
+      deserialize_raffle_account_data(account[1].account)
 }
 
 export const get_all_active_raffles = async() => {
@@ -35,7 +36,7 @@ export const get_all_active_raffles = async() => {
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -63,7 +64,7 @@ export const get_all_finalized_raffles = async() => {
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -88,7 +89,7 @@ export const get_all_finalized_raffles_with_unpublished_winners = async() => {
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -111,19 +112,17 @@ export const get_raffle_by_raffle_no = async(raffle_no:bigint) => {
 
     const no = bs58.encode(le_bytes);
 
-    console.log(no)
-
 
     const account = await connection.getProgramAccounts(
         raffle_program,
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
-                offset: 33, 
+                offset: 129, 
                 bytes: no,
               },
             },
@@ -132,7 +131,7 @@ export const get_raffle_by_raffle_no = async(raffle_no:bigint) => {
         }
       );
 
-      console.log(account.length)
+    deserialize_raffle_account_data(account[0].account);
       
 }
 
@@ -143,7 +142,7 @@ export const get_all_raffles_organized_by_this_address = async(initializer:Publi
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -168,7 +167,7 @@ export const get_all_active_raffles_organized_by_this_address = async(initialize
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -199,7 +198,7 @@ export const get_all_finalized_raffles_organized_by_this_address = async(initial
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -230,7 +229,7 @@ export const get_all_finalized_raffles_organized_with_unpublished_winners_by_thi
         {
           filters: [
             {
-              dataSize: 121,
+              dataSize: 187,
             },
             {
               memcmp: {
@@ -288,7 +287,7 @@ export const get_all_participation_accounts_by_raffle_no = async(raffle_no:bigin
             },
             {
               memcmp: {
-                offset: 32, 
+                offset: 40, 
                 bytes: no,
               },
             },
@@ -297,6 +296,45 @@ export const get_all_participation_accounts_by_raffle_no = async(raffle_no:bigin
         }
       );
 
+      console.log(account.length)
+
+}
+
+export const get_participation_account_by_raffle_noand_winner_no = async(raffle_no:bigint,participant_no:bigint) => {
+
+  const raffle_no_le_bytes = numberToLEBytes8(raffle_no)
+  const participant_no_le_bytes = numberToLEBytes8(participant_no)
+
+  const raffle = bs58.encode(raffle_no_le_bytes);
+  const participant = bs58.encode(participant_no_le_bytes);
+
+  const account = await connection.getProgramAccounts(
+      raffle_program,
+      {
+        filters: [
+          {
+            dataSize: 48,
+          },
+          {
+            memcmp: {
+              offset: 32, 
+              bytes: participant,
+            },
+          },
+          {
+            memcmp: {
+              offset: 40, 
+              bytes: raffle,
+            },
+          },
+  
+        ],
+      }
+    );
+
+    console.log(account.length)
+    deserialize_participation_account_data(account[0].account)
+    return account[0].pubkey;
 }
 
 export const get_raffle_counter = async() => {
@@ -305,5 +343,25 @@ export const get_raffle_counter = async() => {
 
     const account = await connection.getAccountInfo(counter_account)
     
+}
+
+export const get_token_program_and_decimals = async (token_mint:PublicKey) : Promise<[PublicKey, number]> => {
+    
+  const mint = await connection.getAccountInfo(token_mint);
+  const token_program = mint?.owner!;
+  const decimals = (await getMint(connection, token_mint, "confirmed", token_program)).decimals;
+
+
+  return [token_program, decimals];
+}
+
+export const get_terms = async() => {
+
+  const counter_account = PublicKey.findProgramAddressSync([Buffer.from("terms")],raffle_program)[0]
+
+  const account = await connection.getAccountInfo(new PublicKey("GJ2KiCHoCzfob27FpzGFUWT1goic6vm6bYEMonDpWdyE"));
+
+  deserialize_term_account_data(account!)
+  
 }
 

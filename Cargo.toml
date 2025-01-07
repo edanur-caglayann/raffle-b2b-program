@@ -8,6 +8,9 @@ solana-program = "=1.18.26"
 borsh = "1.5.1"
 borsh-derive = "1.5.1"
 thiserror = "1.0.24"
+spl-token-2022 = {version="1.0.0",features=["no-entrypoint"]}
+spl-token = {version="3.1.1",features=["no-entrypoint"]}
+spl-associated-token-account = { version = "2.3.0", features = ["no-entrypoint"] }
 
 [lib]
 crate-type = ["cdylib", "lib"]

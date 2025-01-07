@@ -5,22 +5,27 @@ import {
     VersionedTransaction,
     SystemProgram,
     TransactionInstruction,
+    SYSVAR_RENT_PUBKEY,
     LAMPORTS_PER_SOL,
-    Connection,
-    AddressLookupTableProgram,
-    Transaction,
   } from "@solana/web3.js";
 
   import { deserialize, serialize } from "borsh";
-  import { Batch, BatchSchema, Counter, CounterSchema, Raffle, RaffleName, RaffleSchema } from "./models";
+  import { Counter, CounterSchema, Raffle, RaffleSchema, InitRaffle, InitRaffleSchema } from "./models";
   import {connection} from './connection';
-  import {authority, raffle_program, entropy_account, fee_account, rng_program} from "./accounts"
-  import { deserialize_counter_account_data, deserialize_participation_account_data, deserialize_raffle_account_data, numberToLEBytes8, stringToNumberArray32Bytes } from "./utils";
-  import { get_all_raffles, get_raffle_by_raffle_no } from "./get_info";
+  import { raffle_program, entropy_account, fee_account as rng_program_fee_account, rng_program, token_mint} from "./accounts";
+  import { deserialize_raffle_account_data, numberToLEBytes8, stringToNumberArray32Bytes } from "./utils";
+  import { getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
+  import { get_all_participation_accounts_by_raffle_no, get_all_raffles, get_participation_account_by_raffle_noand_winner_no, get_raffle_by_raffle_no, get_terms, get_token_program_and_decimals } from "./get_info";
+  import { init_config, init_counter, init_term_account, update_terms } from "./admin";
 
 
 
-  const init_raffle = async (raffle_name:string, number_of_participants:bigint) => {
+  const init_raffle = async (raffle_name:string, 
+    participants_required:bigint, 
+    prize_amount:number, 
+    participant_fee:number, 
+    initializer:Keypair, 
+    token_mint:PublicKey) => {
   
   
        const counter_account = PublicKey.findProgramAddressSync([Buffer.from("counter")],raffle_program)[0]
@@ -37,203 +42,126 @@ import {
 
        const raffle_name_array = stringToNumberArray32Bytes(raffle_name)
 
-       const raffle = new Raffle();
+       const [token_program,decimals] = await get_token_program_and_decimals(token_mint)
 
-       raffle.number_of_participants = number_of_participants;
-       raffle.raffle_name = raffle_name_array;
+       const init_raffle = new InitRaffle();
 
-       const raffle_serialized = serialize(RaffleSchema,raffle);
+       init_raffle.participants_required = participants_required;
+       init_raffle.raffle_name = raffle_name_array;
+       init_raffle.decimals = decimals;
+       init_raffle.prize_amount = BigInt(prize_amount*Math.pow(10,decimals));
+       init_raffle.participation_fee = BigInt(participant_fee*LAMPORTS_PER_SOL);
 
-       const concated = Uint8Array.of(0, ...raffle_serialized);
 
-       console.log(concated.length)
+       const serialized = serialize(InitRaffleSchema,init_raffle);
+
+       const concated = Uint8Array.of(0, ...serialized);
+
+
+       const initializer_ata = getAssociatedTokenAddressSync(
+        token_mint,
+        initializer.publicKey,
+        false,
+        token_program,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      const raffle_account_ata = getAssociatedTokenAddressSync(
+        token_mint,
+        raffle_account,
+        true,
+        token_program,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+    const term_account = PublicKey.findProgramAddressSync([Buffer.from("term")], raffle_program)[0];
+
 
        const ix = new TransactionInstruction({
          programId: raffle_program,
          keys: [
-           { isSigner: true, isWritable: true, pubkey: authority.publicKey },
+           { isSigner: true, isWritable: true, pubkey: initializer.publicKey },
+           { isSigner: false, isWritable: true, pubkey: initializer_ata },
            { isSigner: false, isWritable: true, pubkey: raffle_account },
+           { isSigner: false, isWritable: true, pubkey: raffle_account_ata },
            { isSigner: false, isWritable: true, pubkey: counter_account },
+           { isSigner: false, isWritable: false, pubkey: token_mint },
+           { isSigner: false, isWritable: false, pubkey: token_program },
+           { isSigner: false, isWritable: false, pubkey: SYSVAR_RENT_PUBKEY },
+           { isSigner: false, isWritable: false, pubkey: term_account },
            { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
+           { isSigner: false, isWritable: false, pubkey: ASSOCIATED_TOKEN_PROGRAM_ID },
       ],
          data: Buffer.from(concated)
        });
 
        const message = new TransactionMessage({
          instructions: [ix],
-         payerKey: authority.publicKey,
+         payerKey: initializer.publicKey,
          recentBlockhash: (await connection.getLatestBlockhash()).blockhash
        }).compileToV0Message();
 
        const tx = new VersionedTransaction(message);
-       tx.sign([authority]);
+       tx.sign([initializer]);
 
-       const sig = connection.sendTransaction(tx);
+       const sig = await connection.sendTransaction(tx);
 
        console.log("raffle = " + raffle_account.toBase58())
-       console.log("counter = " + counter_account.toBase58())
 
        console.log(sig)
   }
 
-  const add_wallets = async (raffle_no:bigint, batch:bigint) => {
+  const join_raffle = async (raffle_no:bigint, participanta:Keypair) => {
   
-    const initial_batch:bigint = batch;
-  
-   const le_bytes = numberToLEBytes8(raffle_no)
+    const participant = Keypair.generate()
 
-   const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),le_bytes],raffle_program)[0];
+    const transferix = SystemProgram.transfer({
+      fromPubkey:participanta.publicKey,
+      toPubkey:participant.publicKey,
+      lamports:LAMPORTS_PER_SOL*5
+    });
 
+    const raffle_no_le_byte = numberToLEBytes8(raffle_no)
 
-   
-   batch = BigInt(Number(batch) + 1);
-   console.log(batch)
-   const participant_no_le_bytes = numberToLEBytes8(batch);
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_2_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_3_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_4_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_5_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_6_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_7_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_8_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_9_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_10_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_11_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_12_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_13_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_14_le_bytes = numberToLEBytes8(batch);
-   console.log(batch)
-   batch = BigInt(Number(batch) + 1);
-   const participant_no_15_le_bytes = numberToLEBytes8(batch);
-
-   console.log(batch)
+    const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),raffle_no_le_byte],raffle_program)[0]
 
 
-   const user = Keypair.generate().publicKey;
-   const user_2 = Keypair.generate().publicKey;
-   const user_3 = Keypair.generate().publicKey;
-   const user_4 = Keypair.generate().publicKey;
-   const user_5 = Keypair.generate().publicKey;
-   const user_6 = Keypair.generate().publicKey;
-   const user_7 = Keypair.generate().publicKey;
-   const user_8 = Keypair.generate().publicKey;
-   const user_9 = Keypair.generate().publicKey;
-   const user_10 = Keypair.generate().publicKey;
-   const user_11 = Keypair.generate().publicKey;
-   const user_12 = Keypair.generate().publicKey;
-   const user_13 = Keypair.generate().publicKey;
-   const user_14 = Keypair.generate().publicKey;
-   const user_15 = Keypair.generate().publicKey;
+    const participant_pda = PublicKey.findProgramAddressSync([
+      Buffer.from("raf"),
+      raffle_no_le_byte,
+      Buffer.from("par"),
+      participant.publicKey.toBytes()
+    ],raffle_program)[0];
 
 
-   const user_pda = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_2 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_2_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_3 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_3_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_4 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_4_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_5 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_5_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_6 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_6_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_7 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_7_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_8 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_8_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_9 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_9_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_10 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_10_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_11 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_11_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_12 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_12_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_13 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_13_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_14 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_14_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-   const user_pda_15 = PublicKey.findProgramAddressSync([Buffer.from("part"), participant_no_15_le_bytes,Buffer.from("raf"),le_bytes],raffle_program)[0];
-
-   const batch_data = new Batch()
-
-   batch_data.batch = initial_batch;
-
-   const batch_serialized = serialize(BatchSchema,batch_data);
-
-   const concated = Uint8Array.of(1, ...batch_serialized);
-
+    console.log(participant.publicKey.toBase58())
 
     const ix = new TransactionInstruction({
       programId: raffle_program,
       keys: [
-        { isSigner: true, isWritable: true, pubkey: authority.publicKey },
+        { isSigner: true, isWritable: true, pubkey: participant.publicKey },
         { isSigner: false, isWritable: true, pubkey: raffle_account },
+        { isSigner: false, isWritable: true, pubkey: participant_pda },
         { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
-        {isSigner:false, isWritable:false, pubkey: user}, 
-        {isSigner:false, isWritable:true, pubkey: user_pda},
-        {isSigner:false, isWritable:false, pubkey: user_2},
-        {isSigner:false, isWritable:true, pubkey: user_pda_2},
-        {isSigner:false, isWritable:false, pubkey: user_3},
-        {isSigner:false, isWritable:true, pubkey: user_pda_3},
-        {isSigner:false, isWritable:false, pubkey: user_4},
-        {isSigner:false, isWritable:true, pubkey: user_pda_4},
-        {isSigner:false, isWritable:false, pubkey: user_5},
-        {isSigner:false, isWritable:true, pubkey: user_pda_5},
-        {isSigner:false, isWritable:false, pubkey: user_6},
-        {isSigner:false, isWritable:true, pubkey: user_pda_6},
-        {isSigner:false, isWritable:false, pubkey: user_7},
-        {isSigner:false, isWritable:true, pubkey: user_pda_7},
-        {isSigner:false, isWritable:false, pubkey: user_8},
-        {isSigner:false, isWritable:true, pubkey: user_pda_8},
-        {isSigner:false, isWritable:false, pubkey: user_9 },
-        {isSigner:false, isWritable:true, pubkey: user_pda_9},
-        {isSigner:false, isWritable:false, pubkey: user_10},
-        {isSigner:false, isWritable:true, pubkey: user_pda_10},
-        {isSigner:false, isWritable:false, pubkey: user_11},
-        {isSigner:false, isWritable:true, pubkey: user_pda_11},
-        {isSigner:false, isWritable:false, pubkey: user_12},
-        {isSigner:false, isWritable:true, pubkey: user_pda_12},
-        {isSigner:false, isWritable:false, pubkey: user_13},
-        {isSigner:false, isWritable:true, pubkey: user_pda_13},
-        {isSigner:false, isWritable:false, pubkey: user_14},
-        {isSigner:false, isWritable:true, pubkey: user_pda_14},
-
-      ],
-      data: Buffer.from(concated)
+   ],
+      data: Buffer.from([1])
     });
 
-
-  
     const message = new TransactionMessage({
-      instructions: [ix],
-      payerKey: authority.publicKey,
-      recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
+      instructions: [transferix,ix],
+      payerKey: participanta.publicKey,
+      recentBlockhash: (await connection.getLatestBlockhash()).blockhash
     }).compileToV0Message();
-  
-    const tx = new VersionedTransaction(message);
-    tx.sign([authority]);
 
-    connection.sendTransaction(tx);
+    const tx = new VersionedTransaction(message);
+    tx.sign([participanta,participant]);
+
+    const sig = await connection.sendTransaction(tx);
 
 
   }
 
-  const call_rng_choose_winner = async (raffle_no:bigint) => {
-  
-  
+  const call_rng_choose_winner = async (raffle_no:bigint,authority:Keypair) => {
 
    
     const le_bytes = numberToLEBytes8(raffle_no)
@@ -248,7 +176,7 @@ import {
          { isSigner: true, isWritable: true, pubkey: authority.publicKey },
          { isSigner: false, isWritable: true, pubkey: raffle_account },
          { isSigner: false, isWritable: true, pubkey: entropy_account },
-         { isSigner: false, isWritable: true, pubkey: fee_account },
+         { isSigner: false, isWritable: true, pubkey: rng_program_fee_account },
          { isSigner: false, isWritable: false, pubkey: rng_program },
          { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
  
@@ -268,8 +196,7 @@ import {
      connection.sendTransaction(tx);
   }
 
-  const publish_winner = async (raffle_no:bigint) => {
-  
+  const publish_winner = async (raffle_no:bigint,winner_no:bigint,authority:Keypair) => {
   
    
     const le_bytes = numberToLEBytes8(raffle_no)
@@ -280,27 +207,21 @@ import {
     const raffle_account_info = await connection.getAccountInfo(raffle_account);
  
     const raffle = deserialize(RaffleSchema,Raffle,raffle_account_info?.data!);
- 
+
 
     const participant_no_le_bytes = numberToLEBytes8(BigInt(raffle.winner_no.toString()));
-   
 
-    const winner = new PublicKey(raffle.winner_wallet);
- 
-    const winner_pda = PublicKey.findProgramAddressSync(
-     [Buffer.from("part"), participant_no_le_bytes,
-     Buffer.from("raf"),le_bytes],raffle_program)[0];
+    console.log(raffle.winner_no.toString())
 
-     console.log(winner_pda.toBase58())
+    const winner_pda = await get_participation_account_by_raffle_noand_winner_no(BigInt(raffle_no),BigInt(winner_no))
+
+
 
      const ix = new TransactionInstruction({
        programId: raffle_program,
        keys: [
-         { isSigner: true, isWritable: true, pubkey: authority.publicKey },
          { isSigner: false, isWritable: true, pubkey: raffle_account },
-         { isSigner: false, isWritable: false, pubkey: winner_pda },
-         { isSigner: false, isWritable: true, pubkey: winner },
- 
+         { isSigner: false, isWritable: false, pubkey: winner_pda }, 
        ],
        data: Buffer.from([3])
      });
@@ -314,101 +235,186 @@ import {
      const tx = new VersionedTransaction(message);
      tx.sign([authority]);
  
-     connection.sendTransaction(tx);
-
-     //const account = await connection.getAccountInfo(new PublicKey("EuRb5tnLK893xQCsU9nmhCbYU9Eun7EWbiHyERmnBY2F"))
-     //deserialize_participation_account_data(account!)
+     await connection.sendTransaction(tx);
      
   }
 
-  const init_counter = async () => {
+  const claim_prize = async (authority:Keypair,winner:PublicKey, token_mint:PublicKey, number_of_raffles:bigint) => {
   
-  
+    const [token_program,_decimals] = await get_token_program_and_decimals(token_mint)
 
-    const counter_account = PublicKey.findProgramAddressSync([Buffer.from("counter")],raffle_program)[0]
-   
-     const ix = new TransactionInstruction({
-       programId: raffle_program,
-       keys: [
-         { isSigner: true, isWritable: true, pubkey: authority.publicKey },
-         { isSigner: false, isWritable: true, pubkey: counter_account },
-         { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
- 
-       ],
-       data: Buffer.from([4])
-     });
-   
-     const message = new TransactionMessage({
-       instructions: [ix],
-       payerKey: authority.publicKey,
-       recentBlockhash: (await connection.getLatestBlockhash()).blockhash
-     }).compileToV0Message();
-   
-     const tx = new VersionedTransaction(message);
-     tx.sign([authority]);
- 
-     connection.sendTransaction(tx);
+    const raffle_no_le_byte = numberToLEBytes8(number_of_raffles)
 
-     console.log(counter_account.toBase58())
+    const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),raffle_no_le_byte],raffle_program)[0]
+
+    
+    const winner_ata = getAssociatedTokenAddressSync(
+      token_mint,
+      winner,
+      false,
+      token_program,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    const raffle_account_ata = getAssociatedTokenAddressSync(
+      token_mint,
+      raffle_account,
+      true,
+      token_program,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    const winner_pda = PublicKey.findProgramAddressSync([
+      Buffer.from("raf"),
+      raffle_no_le_byte,
+      Buffer.from("par"),
+      winner.toBytes()
+    ],raffle_program)[0];
+
+
+    const ix = new TransactionInstruction({
+      programId: raffle_program,
+      keys: [
+        { isSigner: false, isWritable: true, pubkey: raffle_account },
+        { isSigner: false, isWritable: true, pubkey: raffle_account_ata },
+        { isSigner: false, isWritable: false, pubkey: winner_pda },
+        { isSigner: false, isWritable: false, pubkey: winner },
+        { isSigner: false, isWritable: true, pubkey: winner_ata },
+        { isSigner: false, isWritable: false, pubkey: token_mint },
+        { isSigner: false, isWritable: false, pubkey: token_program },
+        { isSigner: false, isWritable: false, pubkey: SYSVAR_RENT_PUBKEY },
+        { isSigner: false, isWritable: false, pubkey: SystemProgram.programId },
+   ],
+      data: Buffer.from([100])
+    });
+
+    const message = new TransactionMessage({
+      instructions: [ix],
+      payerKey: authority.publicKey,
+      recentBlockhash: (await connection.getLatestBlockhash()).blockhash
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    tx.sign([authority]);
+
+    const sig = connection.sendTransaction(tx);
+
+    console.log("raffle = " + raffle_account.toBase58())
+
+    console.log(sig)
   }
 
-  const close_pda = async (raffle_no:bigint,participant_no:bigint) => {
-  
-  
-   
-    const raffle_no_le_bytes = numberToLEBytes8(raffle_no)
- 
-    const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),raffle_no_le_bytes],raffle_program)[0];
- 
- 
-    const participant_no_le_bytes = numberToLEBytes8(participant_no);
+  const collect_fee_initializer = async (number_of_raffles:bigint, initializer:Keypair) => {
 
- 
-    const participant_pda = PublicKey.findProgramAddressSync(
-     [Buffer.from("part"), participant_no_le_bytes,
-     Buffer.from("raf"),raffle_no_le_bytes],raffle_program)[0];
-   
-     const ix = new TransactionInstruction({
-       programId: raffle_program,
-       keys: [
-         { isSigner: true, isWritable: true, pubkey: authority.publicKey },
-         { isSigner: false, isWritable: true, pubkey: raffle_account },
-         { isSigner: false, isWritable: true, pubkey: participant_pda },
- 
-       ],
-       data: Buffer.from([5])
-     });
-   
-     const message = new TransactionMessage({
-       instructions: [ix],
-       payerKey: authority.publicKey,
-       recentBlockhash: (await connection.getLatestBlockhash()).blockhash
-     }).compileToV0Message();
-   
-     const tx = new VersionedTransaction(message);
-     tx.sign([authority]);
- 
-     connection.sendTransaction(tx);
+
+    const le_bytes = numberToLEBytes8(number_of_raffles)
+
+    const raffle_account = PublicKey.findProgramAddressSync([Buffer.from("raffle"),le_bytes],raffle_program)[0]
+
+
+    const raffle_program_fee_account = PublicKey.findProgramAddressSync([Buffer.from("term")], raffle_program)[0];
+
+    const balance_raffle = await connection.getBalance(raffle_account);
+    const balance_fee = await connection.getBalance(raffle_program_fee_account);
+
+    const ix = new TransactionInstruction({
+      programId: raffle_program,
+      keys: [
+        { isSigner: true, isWritable: true, pubkey: initializer.publicKey },
+        { isSigner: false, isWritable: true, pubkey: raffle_account },
+        { isSigner: false, isWritable: true, pubkey: raffle_program_fee_account },
+   ],
+      data: Buffer.from([200])
+    });
+
+    const message = new TransactionMessage({
+      instructions: [ix],
+      payerKey: initializer.publicKey,
+      recentBlockhash: (await connection.getLatestBlockhash()).blockhash
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    tx.sign([initializer]);
+
+    //const sig = connection.sendTransaction(tx);
+
+
+    //console.log(sig)
+
+    const balance_raffle_after = await connection.getBalance(raffle_account);
+    const balance_fee_after = await connection.getBalance(raffle_program_fee_account);
+
+    console.log(" raffle  " + balance_raffle)
+    console.log(" fee  " + balance_fee)
+    console.log(" raffle after " + balance_fee_after)
+    console.log(" raffle after " + balance_raffle_after)
   }
 
-  const get_balance = async () => {
+  const privateKey = [  252,230,154,161,254,62,202,162,3,194,114,179,144,167,200,109,245,100,163,65,110,47,8,238,67,236,131,219,244,150,177,
+    217,240,7,211,232, 133,42,12,128,21,145,118,148,224,114,6,106,81,143,203,183,205,94,185,89,28,156,216,231,49,52,210,77]
+
+  const authority = Keypair.fromSecretKey(Uint8Array.from(privateKey))
+
+
+  //init_raffle("caglars raffle", BigInt(10),2,3,authority,token_mint)
+  //join_raffle(BigInt(13),authority)
+  //call_rng_choose_winner(BigInt(13),authority)
+  //publish_winner(BigInt(13),BigInt(0),authority);
+  //claim_prize(authority,authority.publicKey,token_mint,BigInt(13))
+
+  collect_fee_initializer(BigInt(13),authority);
+
   
-    const balance_before_tx = await connection.getBalance(authority.publicKey);
-    console.log(balance_before_tx.toString())
-    //8387751640
-    //8386013600
 
-    //8.384528600
-    //8.367374160
-    //8.36737416 SOL
+  //update_terms(authority,1,BigInt(600))
 
-    //=0.01715444 SOL
+  //init_config(authority)
+
+  //init_counter(authority)
+  //init_term_account(authority)
+  //update_terms(authority,5,BigInt(600))
+  
+  //get_terms()
+
+  //get_raffle_by_raffle_no(BigInt(13))  
+
+  //get_participation_account_by_raffle_noand_winner_no(BigInt(10),BigInt(5))
+
+   const create_ata = async () => {
+
+    const winner = new PublicKey("61wHZ9iWcrpj94XdeWYSY2oSXtSHQEDsCf4ijCY19Tgy");
+    const [token_program,_decimals] = await get_token_program_and_decimals(token_mint);
+
+    const raffle_account_ata = getAssociatedTokenAddressSync(
+      token_mint,
+      winner,
+      false,
+      token_program,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    const ix = createAssociatedTokenAccountInstruction(authority.publicKey,raffle_account_ata,winner,token_mint,token_program,ASSOCIATED_TOKEN_PROGRAM_ID)
+   
+    const message = new TransactionMessage({
+      instructions: [ix],
+      payerKey: authority.publicKey,
+      recentBlockhash: (await connection.getLatestBlockhash()).blockhash
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    tx.sign([authority]);
+
+    console.log(raffle_account_ata.toBase58())
+
+    //const sig = connection.sendTransaction(tx);
   }
 
-  get_balance()
+  //create_ata()
 
-  let batch:bigint = BigInt(0)
+ //total_value = 30002185440
+ //collected_value = 30000000000
+ //collected_value_div_by_100 = 300000000
+ //total_fee = 1500000000
+ //transfer_to_initializer = 28500000000
 
-  //add_wallets(BigInt(2),batch)
 
-//init_raffle("test raffle",BigInt(30))

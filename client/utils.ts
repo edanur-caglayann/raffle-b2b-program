@@ -1,5 +1,5 @@
 import { deserialize, serialize } from "borsh";
-import { CounterSchema, Counter, RaffleSchema, Raffle, Participation, ParticipationSchema } from "./models";
+import { CounterSchema, Counter, RaffleSchema, Raffle, Participation, ParticipationSchema, TermsSchema, Terms } from "./models";
 import { AccountInfo, PublicKey } from "@solana/web3.js";
 import { connection } from "./connection";
 
@@ -42,11 +42,14 @@ export function deserialize_raffle_account_data(account_info:AccountInfo<Buffer>
     const raffle = deserialize(RaffleSchema,Raffle,account_info.data);
 
     console.log("raffle no = " + raffle.raffle_no.toString())
-    console.log("number of participants = " + raffle.number_of_participants.toString())
     console.log("winner no = " + raffle.winner_no.toString())
     console.log("raffle state = " + raffle.raffle_state.toString())
+    console.log("current number of participants = " + raffle.current_number_of_participants.toString())
+    console.log("participants required = " + raffle.participants_required.toString())
+    console.log("prize amount = " + raffle.prize_amount.toString())
+    console.log("participation_fee = " + raffle.participation_fee.toString())
     console.log("initializer = " + new PublicKey(raffle.initializer).toBase58())
-    console.log("winner  = " + new PublicKey(raffle.winner_wallet).toBase58())
+    console.log("winner = " + new PublicKey(raffle.winner_address).toBase58())
 
     return raffle;
 
@@ -73,4 +76,14 @@ export function deserialize_counter_account_data(account_info:AccountInfo<Buffer
 
 }
 
+export function deserialize_term_account_data(account_info:AccountInfo<Buffer>){
 
+    const terms = deserialize(TermsSchema,Terms,account_info.data);
+
+    console.log(terms.expiration_time)
+    console.log(terms.fee)
+    console.log(terms.init)
+    
+    return terms;
+
+}
