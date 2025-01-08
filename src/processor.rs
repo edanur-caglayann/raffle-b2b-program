@@ -72,6 +72,7 @@ impl Processor {
         }
     }
 
+    // cekilis baslat
     fn init_raffle(
         accounts: &[AccountInfo],program_id: &Pubkey, init_raffle:InitRaffle
     ) -> ProgramResult{
@@ -133,25 +134,27 @@ impl Processor {
 
         //raffle ata create ix
         let create_dex_ata: solana_program::instruction::Instruction = create_associated_token_account(
-            initializer.key,
-            raffle_account.key, 
-            token_mint.key, 
-            token_program_id.key);
+            initializer.key, // ATA sahibinin cuzdani. bir ATA oluşturulurken işlem ücretlerini ödeyen ve hesabı finanse eden adrestir.
+            raffle_account.key, // Tokenlerin tutuldugu hesap
+            token_mint.key, // ATA, hangi SPL token turu icin olusturuluyor. mint adresi tokenin benzersiz kimligidir
+            token_program_id.key); //kullanilan SPL Token programi
 
+            // olusturdugumuz instructionu(talimati) belirli hesaplar uzerindecalistirir
         invoke(&create_dex_ata,
-              &[initializer.clone(),
-              raffle_account_ata.clone(),
+              &[initializer.clone(), // ATA'yi olusturan kullanici
+              raffle_account_ata.clone(), 
               raffle_account.clone(),
               token_mint.clone(),
               token_program_id.clone(),
               sysvar.clone()])?;
               msg!("3");
 
+              // Kullanicidan baska hesaba belirli bir mik. token transferi
         let transfer_token_ix = spl_token::instruction::transfer_checked(
-            &token_program_id.key,
+            &token_program_id.key, // token islemleri icin kullanilan SPL token progaminin adresi
             &initializer_ata.key, 
             &token_mint.key, 
-            &raffle_account_ata.key, 
+            &raffle_account_ata.key,  // tokenlerin gonderilecegi hedef ATA adresi
             &initializer.key, 
             &[],init_raffle.prize_amount,init_raffle.decimals)?;
 
@@ -202,7 +205,7 @@ impl Processor {
 
         msg!("1");
 
-
+       // stringler + cekilis no + ATA olsuturan hesap
         let (participant_pda_address, bump) = 
         Pubkey::find_program_address(
             &[
@@ -257,6 +260,7 @@ impl Processor {
         Ok(())
     }
 
+    // cekilise katil
     fn join_raffle(
         accounts: &[AccountInfo],program_id: &Pubkey,
     ) -> ProgramResult{
@@ -336,6 +340,7 @@ impl Processor {
          Ok(())
      }
 
+     // kazanani sec
     fn choose_winner(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult{
@@ -373,15 +378,34 @@ impl Processor {
            if raffle.current_number_of_participants != raffle.participants_required && raffle.raffle_time < current_time {return Err(InvalidRaffleState.into());}
         }
 
+        // Baska bir program cagirarak rastgele sayi uretir. Bu sayiyi cekiliste kullanir 
+
         //Creating account metas for CPI to RNG_PROGRAM
-        let initializer_meta: AccountMeta = AccountMeta{ pubkey: *authority.key, is_signer: true, is_writable: true,};
-        let entropy_account_meta: AccountMeta = AccountMeta{ pubkey: *entropy_account.key, is_signer: false, is_writable: true,};
-        let fee_account_meta: AccountMeta = AccountMeta{ pubkey: *fee_account.key, is_signer: false, is_writable: true,};
-        let system_program_meta: AccountMeta = AccountMeta{ pubkey: *system_program.key, is_signer: false, is_writable: false,};
+        let initializer_meta: AccountMeta = AccountMeta{ // instruction'un ihtiyaci olan hesaplarin bilgilerini icerir
+            pubkey: *authority.key, // islemi baslatan otoritenin hesabi
+            is_signer: true, 
+            is_writable: true,};
+
+        let entropy_account_meta: AccountMeta = AccountMeta{  // rastgele sayi uretirke kullanilan entropidir(entropy)
+            pubkey: *entropy_account.key, 
+            is_signer: false, 
+            is_writable: true,};
+
+        let fee_account_meta: AccountMeta = AccountMeta{ // islem icin gereken ucretler
+            pubkey: *fee_account.key, 
+            is_signer: false, 
+            is_writable: true,};
+
+        let system_program_meta: AccountMeta = AccountMeta{  // solana'nin sistem programidir. sadece okumak icindir
+            pubkey: *system_program.key, 
+            is_signer: false, 
+            is_writable: false,
+        };
 
         //Creating instruction to cpi RNG PROGRAM
-        let ix:Instruction = Instruction { program_id: *rng_program.key,
-           accounts: [
+        let ix:Instruction = Instruction {    // rng programa cagri yapmak icin cagri olusturur
+            program_id: *rng_program.key,  // calistirilan programin adresi
+           accounts: [ // islem sirasinda kullanilcak hesaplar
             initializer_meta,
             entropy_account_meta,
             fee_account_meta,
@@ -391,12 +415,13 @@ impl Processor {
         //CPI to RNG_PROGRAM
         invoke(&ix, 
           &[
-            authority.clone(),
-            entropy_account.clone(),
-            fee_account.clone(),
+            authority.clone(), // islemi baslatan kisi (otorite)
+            entropy_account.clone(), // rastgele sayi uretimi icin kullanilan entropi
+            fee_account.clone(), // ucret tahsilati icin kullanilan hesap
             system_program.clone(),
             ])?;
 
+            // cagirilan programin dondurdugu sonuclari alir
         let returned_data:(Pubkey, Vec<u8>)= get_return_data().unwrap();
 
         //Random number is returned from the RNG_PROGRAM
@@ -408,10 +433,11 @@ impl Processor {
             panic!();
         }
 
+        //kazanan numarasi = rastgeel sayi % toplam katilimci say
         let winner_no: u64 = random_number.random_number%raffle.current_number_of_participants;
 
-        raffle.raffle_state = 2;
-        raffle.winner_no = winner_no;
+        raffle.raffle_state = 2; // cekilis tammalandi durum = 2
+        raffle.winner_no = winner_no; // cekilise kazanan num eklenir
 
         raffle.serialize(&mut &mut raffle_account.data.borrow_mut()[..])?;
 
@@ -419,6 +445,7 @@ impl Processor {
         Ok(())
     }
 
+    // kazanani paylas
     fn publish_winner(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult{
@@ -451,6 +478,7 @@ impl Processor {
         Ok(())
     }
 
+    // odul
     fn claim_prize(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult{
@@ -481,6 +509,8 @@ impl Processor {
 
         if raffle.raffle_state != 3{return Err(InvalidRaffleState.into());}
 
+        // kazanan kullanicinin  ATA'sinin sahibini kontrol ederiz.
+        // Eger sahibi bu iki id'den biri degilse bu hesap SPL token hesabi degildir
         if winner_ata.owner!=&spl_token::id() && winner_ata.owner!=&spl_token_2022::id(){
 
             let create_winner_ata: solana_program::instruction::Instruction = create_associated_token_account(
@@ -495,6 +525,7 @@ impl Processor {
           }else{
             let ata_unpacked: Account  = Account::unpack_from_slice(&winner_ata.data.borrow())?;
 
+            // mint adresi & sahibi dogru mu
             if token_mint.key != &ata_unpacked.mint {panic!()}
             if winner_address.key != &ata_unpacked.owner {panic!()}
           }
@@ -530,6 +561,7 @@ impl Processor {
         Ok(())
     }
 
+    // katilmak icin ucret topla
     fn collect_fee_initializer(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult{
@@ -583,6 +615,7 @@ impl Processor {
         Ok(())
     }
 
+    // cekilis sayisi
     fn init_raffle_counter(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult{
@@ -624,6 +657,7 @@ impl Processor {
         Ok(())
     }
 
+    // pda
     fn close_participant_pda(
         accounts: &[AccountInfo],program_id: &Pubkey
     ) -> ProgramResult {
@@ -652,6 +686,7 @@ impl Processor {
         
         Ok(())
     }
+
 
     fn init_config(
         accounts: &[AccountInfo], program_id: &Pubkey
@@ -700,6 +735,7 @@ impl Processor {
     Ok(())
 }
 
+
     fn set_config(
         accounts: &[AccountInfo], program_id: &Pubkey
     ) -> ProgramResult {
@@ -741,6 +777,7 @@ impl Processor {
 
     Ok(())
 }
+
 
     fn init_term_account(
     accounts: &[AccountInfo],
@@ -796,6 +833,7 @@ impl Processor {
     Ok(())
 }
 
+
     fn update_terms(
     accounts: &[AccountInfo],
     program_id: &Pubkey,
@@ -835,6 +873,7 @@ impl Processor {
     Ok(())
 }
 
+
     fn collect_fee(
     accounts: &[AccountInfo],
     program_id: &Pubkey,
@@ -868,6 +907,7 @@ impl Processor {
     
     Ok(())
    }
+
 
     fn check_authority(
         authority: &Pubkey, config: Config

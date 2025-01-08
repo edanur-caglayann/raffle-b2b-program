@@ -3,24 +3,24 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]//187
 pub struct Raffle{
-    pub raffle_state:u8,
-    pub is_unlimited_participant_allowed:u8,
+    pub raffle_state:u8, // cekilis durumu
+    pub is_unlimited_participant_allowed:u8, // sinirsiz katilimciya izin var mi
     pub initializer:[u8;32],
     pub token_mint:[u8;32],
     pub winner_address:[u8;32],
     pub raffle_name:[u8;32],
     pub raffle_no:u64,
-    pub current_number_of_participants:u64,
+    pub current_number_of_participants:u64, // katilimci sayisi
     pub participants_required:u64,
     pub winner_no:u64,
-    pub participation_fee:u64,
+    pub participation_fee:u64, // katilim ucreti
     pub prize_amount:u64,
     pub decimals:u8,
     pub raffle_time:u64,
 }//
 
 #[derive(BorshDeserialize, Debug, PartialEq)]
-pub struct InitRaffle{
+pub struct InitRaffle{ //cekilisi baslasin
   pub is_unlimited_participant_allowed:u8,
   pub raffle_name:[u8;32],
   pub participation_fee:u64,
@@ -52,8 +52,8 @@ pub struct RandomNumber{
 pub struct Term{
   pub initialized:u8,
   pub fee_percent:u64,
-  pub expiration_time:u64,
-  pub min_number_of_participants:u64
+  pub expiration_time:u64, // cekilisin bitis suresi
+  pub min_number_of_participants:u64 // min katilimci say
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]//9
